@@ -1,32 +1,40 @@
-import os
-from setuptools import setup, find_packages
+#!/usr/bin/env python
+
+from os.path import exists
 from version import get_git_version
+try:
+    from setuptools import setup
+except ImportError:
+    from distutils.core import setup
 
-def read_file(filename):
-    """Read a file into a string"""
-    path = os.path.abspath(os.path.dirname(__file__))
-    filepath = os.path.join(path, filename)
-    try:
-        return open(filepath).read()
-    except IOError:
-        return ''
-
-# Use the docstring of the __init__ file to be the description
-DESC = " ".join(__import__('tenant_schemas').__doc__.splitlines()).strip()
+from tenant_schemas import __version__
 
 setup(
-    name = "django-tenant-schemas",
-    version = get_git_version(),
-    url = 'https://github.com/bcarneiro/django-tenant-schemas',
-    author = 'Bernardo Pires',
-    author_email = 'carneiro.be@gmail.com',
-    description = DESC,
-    long_description = read_file('README'),
-    packages = find_packages(),
-    include_package_data = True,
-    install_requires=read_file('requirements.txt'),
-    classifiers = [
-        'License :: OSI Approved :: MIT License',
-        'Framework :: Django',
+    name='django-tenant-schemas',
+    version=get_git_version(),
+    author='Bernardo Pires Carneiro',
+    author_email='carneiro.be@gmail.com',
+    packages=[
+    	'tenant_schemas',
+    	'tenant_schemas.postgresql_backend',
+    	'tenant_schemas.management',
+    	'tenant_schemas.management.commands',
+    	'tenant_schemas.templatetags',
+    	'tenant_schemas.test',
+    	'tenant_schemas.tests',
+    ],
+    scripts=[],
+    url='https://github.com/bcarneiro/django-tenant-schemas',
+    license='MIT',
+    description='Tenant support for Django using PostgreSQL schemas.',
+    long_description=open('README.markdown').read() if exists("README.markdown") else "",
+    classifiers=[	
+		'License :: OSI Approved :: MIT License',
+		'Framework :: Django',
+		'Programming Language :: Python',
+	],
+    install_requires=[
+        'Django >= 1.2.0',
+        'psycopg2',
     ],
 )

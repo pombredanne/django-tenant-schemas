@@ -15,7 +15,6 @@ class BaseTenantCommand(BaseCommand):
         """
         Sets option_list and help dynamically.
         """
-        # instantiate
         obj = super(BaseTenantCommand, cls).__new__(cls, *args, **kwargs)
 
         app_name = get_commands()[obj.COMMAND_NAME]
@@ -27,13 +26,12 @@ class BaseTenantCommand(BaseCommand):
 
         # inherit the options from the original command
         obj.option_list = cmdclass.option_list
-        #print obj.option_list
         obj.option_list += (
             make_option("-s", "--schema", dest="schema_name"),
-            )
+        )
         obj.option_list += (
             make_option("-p", "--skip-public", dest="skip_public", action="store_true", default=False),
-            )
+        )
 
         # prepend the command's original help with the info about schemata iteration
         obj.help = "Calls %s for all registered schemata. You can use regular %s options. "\
@@ -51,7 +49,6 @@ class BaseTenantCommand(BaseCommand):
                   + self.style.SQL_TABLE(tenant.schema_name)\
             + self.style.NOTICE("' then calling %s:" % command_name)
 
-        # sets the schema for the connection
         connection.set_tenant(tenant)
 
         # call the original command with the args it knows
