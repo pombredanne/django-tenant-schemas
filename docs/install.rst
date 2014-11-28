@@ -1,15 +1,19 @@
 ==================
 Installation
 ==================
-Assuming you have django installed, the first step is to install `django-tenant-schemas`.::
+Assuming you have django installed, the first step is to install ``django-tenant-schemas``.
+
+.. code-block:: bash
 
     pip install django-tenant-schemas
 
 Basic Settings
 ==============
-You'll have to make the following modifcations to your `settings.py` file.
+You'll have to make the following modifications to your ``settings.py`` file.
 
-Your `DATABASE_ENGINE` setting needs to be changed to::
+Your ``DATABASE_ENGINE`` setting needs to be changed to
+
+.. code-block:: python
 
     DATABASES = {
         'default': {
@@ -18,18 +22,31 @@ Your `DATABASE_ENGINE` setting needs to be changed to::
         }
     }
     
-Add the middleware `tenant_schemas.middleware.TenantMiddleware` to the top of `MIDDLEWARE_CLASSES`, so that each request can be set to use the correct schema.::
+Add the middleware ``tenant_schemas.middleware.TenantMiddleware`` to the top of ``MIDDLEWARE_CLASSES``, so that each request can be set to use the correct schema.
+
+.. code-block:: python
     
     MIDDLEWARE_CLASSES = (
         'tenant_schemas.middleware.TenantMiddleware',
         #...
     )
     
+Make sure you have ``django.core.context_processors.request`` listed under ``TEMPLATE_CONTEXT_PROCESSORS`` else the tenant will not be available at ``request``.
+
+.. code-block:: python
+
+    TEMPLATE_CONTEXT_PROCESSORS = (
+        'django.core.context_processors.request',
+        #...
+    )
+    
 The Tenant Model
 ================
-Now we have to create your tenant model. To allow the flexibility of having any data in you want in your tenant, we have a mixin called `TenantMixin` which you *have to* inherit from. This Mixin only has two fields (`domain_url` and `schema_name`) and both are required. Here's an example, suppose we have an app named `customers` and we want to create a model called `client`.::
+Now we have to create your tenant model. To allow the flexibility of having any data in you want in your tenant, we have a mixin called ``TenantMixin`` which you **have to** inherit from. This Mixin only has two fields (``domain_url`` and ``schema_name``) and both are required. Here's an example, suppose we have an app named ``customers`` and we want to create a model called ``Client``.
 
-	from django.db import models
+.. code-block:: python
+
+    from django.db import models
     from tenant_schemas.models import TenantMixin
     
     class Client(TenantMixin):
@@ -43,15 +60,18 @@ Now we have to create your tenant model. To allow the flexibility of having any 
 
 Configure Tenant and Shared Applications
 ========================================
-By default all apps will be synced to your `public` schema and to your tenant schemas. If you want to make use of shared and tenant-specific applications, there are two additional settings called `SHARED_APPS` and `TENANT_APPS`. `SHARED_APPS` is a tuple of strings just like `INSTALLED_APPS` and should contain all apps that you want to be synced to `public`. If `SHARED_APPS` is set, then these are the only apps that will be to your `public` schema! The same applies for `TENANT_APPS`, it expects a tuple of strings where each string is an app. If set, only those applications will be synced to all your tenants. Here's a sample setting::
+By default all apps will be synced to your ``public`` schema and to your tenant schemas. If you want to make use of shared and tenant-specific applications, there are two additional settings called ``SHARED_APPS`` and ``TENANT_APPS``. ``SHARED_APPS`` is a tuple of strings just like ``INSTALLED_APPS`` and should contain all apps that you want to be synced to ``public``. If ``SHARED_APPS`` is set, then these are the only apps that will be to your ``public`` schema! The same applies for ``TENANT_APPS``, it expects a tuple of strings where each string is an app. If set, only those applications will be synced to all your tenants. Here's a sample setting
+
+.. code-block:: python
 
     SHARED_APPS = (
         'tenant_schemas',  # mandatory
         'customers', # you must list the app where your tenant model resides in
         
+        'django.contrib.contenttypes',
+         
         # everything below here is optional
         'django.contrib.auth', 
-        'django.contrib.contenttypes', 
         'django.contrib.sessions', 
         'django.contrib.sites', 
         'django.contrib.messages', 
@@ -60,7 +80,6 @@ By default all apps will be synced to your `public` schema and to your tenant sc
     
     TENANT_APPS = (
         # The following Django contrib apps must be in TENANT_APPS
-        'django.contrib.auth',
         'django.contrib.contenttypes',
 
         # your tenant-specific apps
@@ -69,76 +88,142 @@ By default all apps will be synced to your `public` schema and to your tenant sc
     )
 
     INSTALLED_APPS = SHARED_APPS + TENANT_APPS
+    
+.. warning::
 
-You also have to set where your tenant model is.::
+   As of now it's not possible to have a centralized ``django.contrib.auth``.
+
+You also have to set where your tenant model is.
+
+.. code-block:: python
 
     TENANT_MODEL = "customers.Client" # app.Model
     
-Now run `sync_schemas`, this will create the shared apps on the `public` schema. Note: your database should be empty if this is the first time you're running this command.::
+Now run ``sync_schemas``, this will create the shared apps on the ``public`` schema. Note: your database should be empty if this is the first time you're running this command.
+
+.. code-block:: bash
 
     python manage.py sync_schemas --shared
     
 .. warning::
 
-   Never use `syncdb` as it would sync *all* your apps to `public`!
+   Never use ``syncdb`` as it would sync *all* your apps to ``public``!
     
-Lastly, you need to create a tenant whose schema is `public` and it's address is your domain URL. Please see the section on :doc:`use <use>`.
+Lastly, you need to create a tenant whose schema is ``public`` and it's address is your domain URL. Please see the section on :doc:`use <use>`.
+
+You can also specify extra schemas that should be visible to all queries using
+``PG_EXTRA_SEARCH_PATHS`` setting.
+
+.. code-block:: python
+
+   PG_EXTRA_SEARCH_PATHS = ['extensions']
+
+``PG_EXTRA_SEARCH_PATHS`` should be a list of schemas you want to make visible
+globally.
+
+.. tip::
+
+   You can create a dedicated schema to hold postgresql extensions and make it
+   available globally. This helps avoid issues caused by hiding the public
+   schema from queries.
 
 South Migrations
 ================
 This app supports `South <http://south.aeracode.org/>`_  so if you haven't configured it yet and would like to:
 
-For Django 1.1 or below::
+For Django 1.1 or below
+
+.. code-block:: python
 
     SOUTH_DATABASE_ADAPTER = 'south.db.postgresql_psycopg2'
 
-For Django 1.2 or above::
+For Django 1.2 or above
+
+.. code-block:: python
 
     SOUTH_DATABASE_ADAPTERS = {
         'default': 'south.db.postgresql_psycopg2',
     }
     
-You can list `south` under `TENANT_APPS` and `SHARED_APPS` if you want. 
+You can list ``south`` under ``TENANT_APPS`` and ``SHARED_APPS`` if you want.
+
+We override ``south``'s ``syncdb`` and ``migrate`` command, so you'll need to change your ``INSTALLED_APPS`` to
+
+.. code-block:: python
+
+    INSTALLED_APPS = SHARED_APPS + TENANT_APPS + ('tenant_schemas',)
+    
+This makes sure ``tenant_schemas`` is the last on the list and therefore always has precedence when running an overridden command.
 
 Optional Settings
 =================
-By default `PUBLIC_SCHEMA_URL_TOKEN` is set to `None`, which means you can't serve different views on the same path. To be able to have tenant URL routing see the section below.
+
+.. attribute:: PUBLIC_SCHEMA_NAME
+
+    :Default: ``'public'``
+    
+    The schema name that will be treated as ``public``, that is, where the ``SHARED_APPS`` will be installed.
+    
+.. attribute:: TENANT_CREATION_FAKES_MIGRATIONS
+
+    :Default: ``'True'``
+    
+    Sets if the models will be synced directly to the last version and all migration subsequently faked. Useful in the cases where migrations can not be faked and need to be ran individually. Be aware that setting this to `False` may significantly slow down the process of creating tenants. Only relevant if `South <http://south.aeracode.org/>`_ is used.
 
 Tenant View-Routing
 -------------------
-We have a goodie called `PUBLIC_SCHEMA_URL_TOKEN`. Suppose you have your main website at `example.com` and a customer at `customer.example.com`. You probably want your user to be routed to different views when someone requests `http://example.com/` and `http://customer.example.com/`. Because django only uses the string after the host name, this would be impossible, both would call the view at `/`. This is where `PUBLIC_SCHEMA_URL_TOKEN` comes in handy. If set, the string `PUBLIC_SCHEMA_URL_TOKEN` will be prepended to the request's `path_info` when the `public` schema is being requested. So for example, if you have::
 
-    PUBLIC_SCHEMA_URL_TOKEN = '/main'
+.. attribute:: PUBLIC_SCHEMA_URLCONF
+
+    :Default: ``None``
+
+    We have a goodie called ``PUBLIC_SCHEMA_URLCONF``. Suppose you have your main website at ``example.com`` and a customer at ``customer.example.com``. You probably want your user to be routed to different views when someone requests ``http://example.com/`` and ``http://customer.example.com/``. Because django only uses the string after the host name, this would be impossible, both would call the view at ``/``. This is where ``PUBLIC_SCHEMA_URLCONF`` comes in handy. If set, when the ``public`` schema is being requested, the value of this variable will be used instead of `ROOT_URLCONF <https://docs.djangoproject.com/en/dev/ref/settings/#std:setting-ROOT_URLCONF>`_. So for example, if you have
+
+    .. code-block:: python
+
+        PUBLIC_SCHEMA_URLCONF = 'myproject.urls_public'
     
-When requesting the view `/login/` from the public tenant (your main website), this will be translated to `/main/login/`. You can now edit your `urls.py` file to use another view for a request incoming at `/main/login/`. Every time a call is made at the public's hostname, `/main` will be prepended to the request's path info. This is of course invisible to the user, even though django will internally see it at as `/main/login/`, the user will still be seeing `/login/`. When receiving a request to a tenant using the `public` schema, this token is added automatically via our middleware. Here's a suggestion for a `urls.py` file.::
+    When requesting the view ``/login/`` from the public tenant (your main website), it will search for this path on ``PUBLIC_SCHEMA_URLCONF`` instead of ``ROOT_URLCONF``. 
 
-    # settings.py
-    PUBLIC_SCHEMA_URL_TOKEN = '/main'
-    
-    # urls.py
-    urlpatterns = patterns('',
-        url(r'^main/$', 'your_project.public_urls'),
-        url(r'^', include('your_project.tenant_urls')),
-    )
-    
-Where `public_urls.py` would contain the patterns for your main website, which is not specific to any tenant and `tenant_urls.py` would contain all your tenant-specific patterns.
+Separate projects for the main website and tenants (optional)
+-------------------------------------------------------------
+In some cases using the ``PUBLIC_SCHEMA_URLCONF`` can be difficult. For example, `Django CMS <https://www.django-cms.org/>`_ takes some control over the default Django URL routing by using middlewares that do not play well with the tenants. Another example would be when some apps on the main website need different settings than the tenants website. In these cases it is much simpler if you just run the main website `example.com` as a separate application. 
 
-As you may have noticed, calling `reverse` or the `{% url %}` template tag would cause the wrong URL to be generated. This app comes with it's own versions for `reverse <https://github.com/bcarneiro/django-tenant-schemas/blob/master/tenant_schemas/urlresolvers.py>`_, `reverse_lazy <https://github.com/bcarneiro/django-tenant-schemas/blob/master/tenant_schemas/urlresolvers.py>`_  and `{% url %} <https://github.com/bcarneiro/django-tenant-schemas/blob/master/tenant_schemas/templatetags/tenant.py>`_ but don't worry, they don't do anything magical, they just remove `PUBLIC_SCHEMA_URL_TOKEN` from the beginning of the URL.
+If your projects are ran using a WSGI configuration, this can be done by creating a filed called ``wsgi_main_website.py`` in the same folder as ``wsgi.py``.
 
-Import the `reverse` and `reverse_lazy` methods where needed.::
+.. code-block:: python
 
-    from tenant_schemas.urlresolvers import reverse, reverse_lazy
+    # wsgi_main_website.py
+    import os
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "project.settings_public")
 
-To use the template tag, add the following line to the top of your template file.::
+    from django.core.wsgi import get_wsgi_application
+    application = get_wsgi_application()
 
-    {% load url from tenant %}
-    
-This should not have any side-effects on your current code.
+If you put this in the same Django project, you can make a new ``settings_public.py`` which points to a different ``urls_public.py``. This has the advantage that you can use the same apps that you use for your tenant websites.
+
+Or you can create a completely separate project for the main website, but be aware that if you specify a PostgreSQL database in the ``DATABASES`` setting in ``settings.py``, Django will use its default ``public`` schema as `described in the PostgreSQL documentation <http://www.postgresql.org/docs/9.2/static/ddl-schemas.html#DDL-SCHEMAS-PUBLIC>`_.
+
+Configuring your Apache Server (optional)
+=========================================
+Here's how you can configure your Apache server to route all subdomains to your django project so you don't have to setup any subdomains manually.
+
+.. code-block:: apacheconf
+
+    <VirtualHost 127.0.0.1:8080>
+        ServerName mywebsite.com
+        ServerAlias *.mywebsite.com mywebsite.com
+        WSGIScriptAlias / "/path/to/django/scripts/mywebsite.wsgi"
+    </VirtualHost>
+
+`Django's Deployment with Apache and mod_wsgi <https://docs.djangoproject.com/en/dev/howto/deployment/wsgi/modwsgi/>`_ might interest you too.
 
 Building Documentation
 ======================
 Documentation is available in ``docs`` and can be built into a number of 
-formats using `Sphinx <http://pypi.python.org/pypi/Sphinx>`_. To get started::
+formats using `Sphinx <http://pypi.python.org/pypi/Sphinx>`_. To get started
+
+.. code-block:: bash
 
     pip install Sphinx
     cd docs

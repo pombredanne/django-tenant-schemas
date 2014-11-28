@@ -1,7 +1,9 @@
 *~
 *.pyc
+*.swp
 .DS_Store
 VERSION
-build/
+_build/
 dist/
 django_tenant_schemas.egg-info
+.idea/

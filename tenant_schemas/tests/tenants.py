@@ -1,34 +1,20 @@
-from django.conf import settings
 from django.db import connection
-from django.test.testcases import TransactionTestCase
+
 from tenant_schemas.tests.models import Tenant, NonAutoSyncTenant, DummyModel
-from tenant_schemas.utils import tenant_context, schema_exists, get_public_schema_name
+from tenant_schemas.tests.testcases import BaseTestCase
+from tenant_schemas.utils import tenant_context, schema_context, schema_exists
 
-class TenantTestCase(TransactionTestCase):
+
+class TenantTestCase(BaseTestCase):
     def tearDown(self):
-        """
-        Delete all tenant schemas. Tenant schema are not deleted
-        automatically by django.
-        """
-        connection.set_schema_to_public()
-        do_not_delete = [get_public_schema_name(), 'information_schema']
-        cursor = connection.cursor()
-
-        # Use information_schema.schemata instead of pg_catalog.pg_namespace in
-        # utils.schema_exists, so that we only "see" schemas that we own
-        cursor.execute('SELECT schema_name FROM information_schema.schemata')
-
-        for row in cursor.fetchall():
-            if not row[0].startswith('pg_') and row[0] not in do_not_delete:
-                # todo: this actually doesn't delete the schema. why?
-                print "Deleting schema %s" % row[0]
-                cursor.execute('DROP SCHEMA %s CASCADE' % row[0])
+        super(TenantTestCase, self).tearDown()
+        NonAutoSyncTenant.objects.all().delete()
 
     def test_tenant_schema_is_created(self):
         """
         when saving a tenant, it's schema should be created
         """
-        tenant = Tenant(domain_url='test.com', schema_name='test_tenant')
+        tenant = Tenant(domain_url='something.test.com', schema_name='test')
         tenant.save()
 
         self.assertTrue(schema_exists(tenant.schema_name))
@@ -40,16 +26,17 @@ class TenantTestCase(TransactionTestCase):
         """
         self.assertFalse(schema_exists('non_auto_sync_tenant'))
 
-        tenant = NonAutoSyncTenant(domain_url='test.com', schema_name='non_auto_sync_tenant')
+        tenant = NonAutoSyncTenant(domain_url='something.test.com',
+                                   schema_name='test')
         tenant.save()
 
         self.assertFalse(schema_exists(tenant.schema_name))
 
-    def test_edit_tenant(self):
+    def test_sync_tenant(self):
         """
         when editing an existing tenant, all data should be kept
         """
-        tenant = Tenant(domain_url='test.com', schema_name='test')
+        tenant = Tenant(domain_url='something.test.com', schema_name='test')
         tenant.save()
 
         # go to tenant's path
@@ -60,8 +47,11 @@ class TenantTestCase(TransactionTestCase):
         DummyModel(name="awesome!").save()
 
         # edit tenant
+        connection.set_schema_to_public()
         tenant.domain_url = 'example.com'
         tenant.save()
+
+        connection.set_tenant(tenant)
 
         # test if data is still there
         self.assertEquals(DummyModel.objects.count(), 2)
@@ -69,7 +59,8 @@ class TenantTestCase(TransactionTestCase):
     def test_switching_search_path(self):
         dummies_tenant1_count, dummies_tenant2_count = 0, 0
 
-        tenant1 = Tenant(domain_url='test.com', schema_name='tenant1')
+        tenant1 = Tenant(domain_url='something.test.com',
+                         schema_name='tenant1')
         tenant1.save()
 
         connection.set_schema_to_public()
@@ -98,3 +89,15 @@ class TenantTestCase(TransactionTestCase):
         # switch back to tenant2's path
         with tenant_context(tenant2):
             self.assertEqual(DummyModel.objects.count(), dummies_tenant2_count)
+
+    def test_switching_tenant_without_previous_tenant(self):
+        tenant = Tenant(domain_url='something.test.com', schema_name='test')
+        tenant.save()
+
+        connection.tenant = None
+        with tenant_context(tenant):
+            DummyModel(name="No exception please").save()
+
+        connection.tenant = None
+        with schema_context(tenant.schema_name):
+            DummyModel(name="Survived it!").save()
