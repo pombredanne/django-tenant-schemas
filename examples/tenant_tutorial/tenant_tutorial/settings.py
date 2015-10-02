@@ -78,7 +78,6 @@ STATICFILES_DIRS = (
 STATICFILES_FINDERS = (
     'django.contrib.staticfiles.finders.FileSystemFinder',
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
-#    'django.contrib.staticfiles.finders.DefaultStorageFinder',
 )
 
 # Make this unique, and don't share it with anybody.
@@ -88,8 +87,13 @@ SECRET_KEY = 'as-%*_93v=r5*p_7cu8-%o6b&x^g+q$#*e*fl)k)x0-t=%q0qa'
 TEMPLATE_LOADERS = (
     'django.template.loaders.filesystem.Loader',
     'django.template.loaders.app_directories.Loader',
-#     'django.template.loaders.eggs.Loader',
 )
+
+DATABASE_ROUTERS = (
+    'tenant_schemas.routers.TenantSyncRouter',
+)
+
+TEST_RUNNER = 'django.test.runner.DiscoverRunner'
 
 MIDDLEWARE_CLASSES = (
     'tenant_tutorial.middleware.TenantTutorialMiddleware',
@@ -139,7 +143,11 @@ TENANT_APPS = (
 
 TENANT_MODEL = "customers.Client"  # app.Model
 
-INSTALLED_APPS = TENANT_APPS + SHARED_APPS + ('tenant_schemas',)
+import django
+if django.VERSION >= (1, 7, 0):
+    INSTALLED_APPS = list(set(TENANT_APPS + SHARED_APPS))
+else:
+    INSTALLED_APPS = TENANT_APPS + SHARED_APPS + ('tenant_schemas',)
 
 SESSION_SERIALIZER = 'django.contrib.sessions.serializers.JSONSerializer'
 

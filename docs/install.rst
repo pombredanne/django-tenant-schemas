@@ -21,17 +21,28 @@ Your ``DATABASE_ENGINE`` setting needs to be changed to
             # ..
         }
     }
-    
+
+Add `tenant_schemas.routers.TenantSyncRouter` to your `DATABASE_ROUTERS` setting, so that the correct apps can be synced, depending on what's being synced (shared or tenant).
+
+.. code-block:: python
+
+    DATABASE_ROUTERS = (
+        'tenant_schemas.routers.TenantSyncRouter',
+    )
+
 Add the middleware ``tenant_schemas.middleware.TenantMiddleware`` to the top of ``MIDDLEWARE_CLASSES``, so that each request can be set to use the correct schema.
+
+If the hostname in the request does not match a valid tenant ``domain_url``, a HTTP 404 Not Found will be returned. If you'd like to raise ``DisallowedHost`` and a HTTP 400 response instead, use the ``tenant_schemas.middleware.SuspiciousTenantMiddleware``.
 
 .. code-block:: python
     
     MIDDLEWARE_CLASSES = (
         'tenant_schemas.middleware.TenantMiddleware',
+        # 'tenant_schemas.middleware.SuspiciousTenantMiddleware',
         #...
     )
     
-Make sure you have ``django.core.context_processors.request`` listed under ``TEMPLATE_CONTEXT_PROCESSORS`` else the tenant will not be available at ``request``.
+Make sure you have ``django.core.context_processors.request`` listed under ``TEMPLATE_CONTEXT_PROCESSORS`` else the tenant will not be available on ``request``.
 
 .. code-block:: python
 
@@ -42,7 +53,7 @@ Make sure you have ``django.core.context_processors.request`` listed under ``TEM
     
 The Tenant Model
 ================
-Now we have to create your tenant model. To allow the flexibility of having any data in you want in your tenant, we have a mixin called ``TenantMixin`` which you **have to** inherit from. This Mixin only has two fields (``domain_url`` and ``schema_name``) and both are required. Here's an example, suppose we have an app named ``customers`` and we want to create a model called ``Client``.
+Now we have to create your tenant model. Your tenant model can contain whichever fields you want, however, you **must** inherit from ``TenantMixin``. This Mixin only has two fields (``domain_url`` and ``schema_name``) and both are required. Here's an example, suppose we have an app named ``customers`` and we want to create a model called ``Client``.
 
 .. code-block:: python
 
@@ -60,7 +71,7 @@ Now we have to create your tenant model. To allow the flexibility of having any 
 
 Configure Tenant and Shared Applications
 ========================================
-By default all apps will be synced to your ``public`` schema and to your tenant schemas. If you want to make use of shared and tenant-specific applications, there are two additional settings called ``SHARED_APPS`` and ``TENANT_APPS``. ``SHARED_APPS`` is a tuple of strings just like ``INSTALLED_APPS`` and should contain all apps that you want to be synced to ``public``. If ``SHARED_APPS`` is set, then these are the only apps that will be to your ``public`` schema! The same applies for ``TENANT_APPS``, it expects a tuple of strings where each string is an app. If set, only those applications will be synced to all your tenants. Here's a sample setting
+To make use of shared and tenant-specific applications, there are two settings called ``SHARED_APPS`` and ``TENANT_APPS``. ``SHARED_APPS`` is a tuple of strings just like ``INSTALLED_APPS`` and should contain all apps that you want to be synced to ``public``. If ``SHARED_APPS`` is set, then these are the only apps that will be synced to your ``public`` schema! The same applies for ``TENANT_APPS``, it expects a tuple of strings where each string is an app. If set, only those applications will be synced to all your tenants. Here's a sample setting
 
 .. code-block:: python
 
@@ -87,11 +98,7 @@ By default all apps will be synced to your ``public`` schema and to your tenant 
         'myapp.houses', 
     )
 
-    INSTALLED_APPS = SHARED_APPS + TENANT_APPS
-    
-.. warning::
-
-   As of now it's not possible to have a centralized ``django.contrib.auth``.
+    INSTALLED_APPS = list(set(SHARED_APPS + TENANT_APPS))
 
 You also have to set where your tenant model is.
 
@@ -99,15 +106,19 @@ You also have to set where your tenant model is.
 
     TENANT_MODEL = "customers.Client" # app.Model
     
-Now run ``sync_schemas``, this will create the shared apps on the ``public`` schema. Note: your database should be empty if this is the first time you're running this command.
+Now run ``migrate_schemas --shared`` (``sync_schemas --shared`` if you're on Django 1.6 or older), this will create the shared apps on the ``public`` schema. Note: your database should be empty if this is the first time you're running this command.
 
 .. code-block:: bash
 
+    # Django >= 1.7
+    python manage.py migrate_schemas --shared
+
+    # Django < 1.7
     python manage.py sync_schemas --shared
     
 .. warning::
 
-   Never use ``syncdb`` as it would sync *all* your apps to ``public``!
+   Never use ``migrate`` or ``syncdb`` as it would sync *all* your apps to ``public``!
     
 Lastly, you need to create a tenant whose schema is ``public`` and it's address is your domain URL. Please see the section on :doc:`use <use>`.
 
@@ -129,7 +140,7 @@ globally.
 
 South Migrations
 ================
-This app supports `South <http://south.aeracode.org/>`_  so if you haven't configured it yet and would like to:
+If you're on Django 1.6 or older, this app supports `South <http://south.aeracode.org/>`_  so if you haven't configured it yet and would like to:
 
 For Django 1.1 or below
 
@@ -162,7 +173,7 @@ Optional Settings
 
     :Default: ``'public'``
     
-    The schema name that will be treated as ``public``, that is, where the ``SHARED_APPS`` will be installed.
+    The schema name that will be treated as ``public``, that is, where the ``SHARED_APPS`` will be created.
     
 .. attribute:: TENANT_CREATION_FAKES_MIGRATIONS
 
@@ -202,7 +213,25 @@ If your projects are ran using a WSGI configuration, this can be done by creatin
 
 If you put this in the same Django project, you can make a new ``settings_public.py`` which points to a different ``urls_public.py``. This has the advantage that you can use the same apps that you use for your tenant websites.
 
-Or you can create a completely separate project for the main website, but be aware that if you specify a PostgreSQL database in the ``DATABASES`` setting in ``settings.py``, Django will use its default ``public`` schema as `described in the PostgreSQL documentation <http://www.postgresql.org/docs/9.2/static/ddl-schemas.html#DDL-SCHEMAS-PUBLIC>`_.
+Or you can create a completely separate project for the main website.
+
+Caching
+-------
+
+To enable tenant aware caching you can set the `KEY_FUNCTION <https://docs.djangoproject.com/en/1.8/ref/settings/#std:setting-CACHES-KEY_FUNCTION>`_ setting to use the provided ``make_key`` helper function which
+adds the tenants ``schema_name`` as the first key prefix.
+
+.. code-block:: python
+
+    CACHES = {
+        "default": {
+            ...
+            'KEY_FUNCTION': 'tenant_schemas.cache.make_key',
+            'REVERSE_KEY_FUNCTION': 'tenant_schemas.cache.reverse_key',
+        },
+    }
+
+The ``REVERSE_KEY_FUNCTION`` setting is only required if you are using the `django-redis <https://github.com/niwinz/django-redis>`_ cache backend.
 
 Configuring your Apache Server (optional)
 =========================================
@@ -230,3 +259,4 @@ formats using `Sphinx <http://pypi.python.org/pypi/Sphinx>`_. To get started
     make html
 
 This creates the documentation in HTML format at ``docs/_build/html``.
+

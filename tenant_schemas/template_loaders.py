@@ -7,10 +7,12 @@ import hashlib
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.template.base import TemplateDoesNotExist
-from django.template.loader import BaseLoader, get_template_from_string, find_template_loader, make_origin
+from django.template.loader import (BaseLoader, get_template_from_string,
+                                    find_template_loader, make_origin)
 from django.utils.encoding import force_bytes
 from django.utils._os import safe_join
 from django.db import connection
+from tenant_schemas.postgresql_backend.base import FakeTenant
 
 
 class CachedLoader(BaseLoader):
@@ -37,7 +39,7 @@ class CachedLoader(BaseLoader):
         for loader in self.loaders:
             try:
                 template, display_name = loader(name, dirs)
-                return (template, make_origin(display_name, loader, name, dirs))
+                return template, make_origin(display_name, loader, name, dirs)
             except TemplateDoesNotExist:
                 pass
         raise TemplateDoesNotExist(name)
@@ -48,7 +50,8 @@ class CachedLoader(BaseLoader):
         else:
             key = template_name
         if template_dirs:
-            # If template directories were specified, use a hash to differentiate
+            # If template directories were specified, use a hash to
+            # differentiate
             if connection.tenant:
                 key = '-'.join([str(connection.tenant.pk), template_name,
                                 hashlib.sha1(force_bytes('|'.join(template_dirs))).hexdigest()])
@@ -83,7 +86,7 @@ class FilesystemLoader(BaseLoader):
         directory in "template_dirs". Any paths that don't lie inside one of the
         template dirs are excluded from the result set, for security reasons.
         """
-        if not connection.tenant:
+        if not connection.tenant or isinstance(connection.tenant, FakeTenant):
             return
         if not template_dirs:
             try:

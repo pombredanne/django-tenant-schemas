@@ -106,24 +106,34 @@ that you read the complete version at
 
 Your ``DATABASE_ENGINE`` setting needs to be changed to
 
-::
+.. code-block:: python
 
     DATABASES = {
         'default': {
             'ENGINE': 'tenant_schemas.postgresql_backend',
             # ..
         }
-    }
+    }    
 
 Add the middleware ``tenant_schemas.middleware.TenantMiddleware`` to the
 top of ``MIDDLEWARE_CLASSES``, so that each request can be set to use
 the correct schema.
 
-::
+.. code-block:: python
 
     MIDDLEWARE_CLASSES = (
         'tenant_schemas.middleware.TenantMiddleware',
         #...
+    )
+    
+Add ``tenant_schemas.routers.TenantSyncRouter`` to your `DATABASE_ROUTERS` 
+setting, so that the correct apps can be synced, depending on what's 
+being synced (shared or tenant).
+
+.. code-block:: python
+
+    DATABASE_ROUTERS = (
+        'tenant_schemas.routers.TenantSyncRouter',
     )
 
 Add ``tenant_schemas`` to your ``INSTALLED_APPS``.
@@ -131,7 +141,7 @@ Add ``tenant_schemas`` to your ``INSTALLED_APPS``.
 Create your tenant model
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-::
+.. code-block:: python
 
     from django.db import models
     from tenant_schemas.models import TenantMixin
@@ -146,21 +156,21 @@ Define on ``settings.py`` which model is your tenant model. Assuming you
 created ``Client`` inside an app named ``customers``, your
 ``TENANT_MODEL`` should look like this:
 
-::
+.. code-block:: python
 
     TENANT_MODEL = "customers.Client" # app.Model
 
-Now run ``sync_schemas``, this will sync your apps to the ``public``
-schema.
+Now run ``migrate_schemas`` (``sync_schemas`` if you're on Django 1.6 and older), 
+this will sync your apps to the ``public`` schema.
 
 ::
 
-    python manage.py sync_schemas --shared
+    python manage.py migrate_schemas --shared
 
 Create your tenants just like a normal django model. Calling ``save``
-will automatically create and sync the schema.
+will automatically create and sync/migrate the schema.
 
-::
+.. code-block:: python
 
     from customers.models import Client
 
@@ -191,9 +201,9 @@ tenant specific apps. Complete instructions can be found at
 .. _PostgreSQL’s official documentation on schemas: http://www.postgresql.org/docs/9.1/static/ddl-schemas.html
 .. _Multi-Tenant Data Architecture: http://msdn.microsoft.com/en-us/library/aa479086.aspx
 
-.. |PyPi version| image:: https://pypip.in/v/django-tenant-schemas/badge.png
-   :target: https://crate.io/packages/django-tenant-schemas/
-.. |PyPi downloads| image:: https://pypip.in/d/django-tenant-schemas/badge.png
-   :target: https://crate.io/packages/django-tenant-schemas/
+.. |PyPi version| image:: https://img.shields.io/pypi/v/django-tenant-schemas.svg
+   :target: https://pypi.python.org/pypi/django-tenant-schemas
+.. |PyPi downloads| image:: https://img.shields.io/pypi/dm/django-tenant-schemas.svg
+   :target: https://pypi.python.org/pypi/django-tenant-schemas
 .. _setup: https://django-tenant-schemas.readthedocs.org/en/latest/install.html
 .. _django-tenant-schemas.readthedocs.org: https://django-tenant-schemas.readthedocs.org/en/latest/

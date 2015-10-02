@@ -1,9 +1,13 @@
 import re
 import warnings
 from django.conf import settings
-from django.utils.importlib import import_module
+try:
+    from importlib import import_module
+except ImportError:
+    from django.utils.importlib import import_module  # importlib support for python < 2.7
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from tenant_schemas.utils import get_public_schema_name, get_limit_set_calls
+from tenant_schemas.postgresql_backend.introspection import DatabaseSchemaIntrospection
 import django.db.utils
 import psycopg2
 
@@ -44,7 +48,15 @@ class DatabaseWrapper(original_backend.DatabaseWrapper):
 
     def __init__(self, *args, **kwargs):
         super(DatabaseWrapper, self).__init__(*args, **kwargs)
+
+        # Use a patched version of the DatabaseIntrospection that only returns the table list for the
+        # currently selected schema.
+        self.introspection = DatabaseSchemaIntrospection(self)
         self.set_schema_to_public()
+
+    def close(self):
+        self.search_path_set = False
+        super(DatabaseWrapper, self).close()
 
     def set_tenant(self, tenant, include_public=True):
         """
@@ -139,5 +151,9 @@ class FakeTenant:
     def __init__(self, schema_name):
         self.schema_name = schema_name
 
-DatabaseError = original_backend.DatabaseError
-IntegrityError = original_backend.IntegrityError
+if ORIGINAL_BACKEND == "django.contrib.gis.db.backends.postgis":
+    DatabaseError = django.db.utils.DatabaseError
+    IntegrityError = psycopg2.IntegrityError
+else:
+    DatabaseError = original_backend.DatabaseError
+    IntegrityError = original_backend.IntegrityError
